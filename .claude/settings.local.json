@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(dir /b \"C:\\\\Users\\\\illuni_61\\\\personal projects\\\\NestJSProject-Study\\\\*\\\\*.md\")"
+    ]
+  }
+}
