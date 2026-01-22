@@ -1,56 +1,324 @@
 # Day 9: 데이터베이스 기초 (TypeORM)
 
 ## 학습 목표
-- 데이터베이스 기본 개념 이해
-- ORM과 TypeORM 개념 파악
-- Entity와 Repository 사용법 습득
+- 데이터베이스와 ORM이 무엇인지 이해
+- Entity가 무엇이고 어떻게 만드는지 파악
+- Repository로 데이터를 다루는 방법 이해
 
 ---
 
-## C# 개발자를 위한 핵심 차이점
+## 1. 데이터베이스란?
 
-> **TypeORM = Entity Framework Core**
-> EF Core를 알고 있다면 TypeORM은 매우 쉽습니다!
+### 한 줄 정리
+> **데이터를 저장하는 창고**
 
-| 개념 | Entity Framework Core | TypeORM |
-|------|----------------------|---------|
-| ORM | EF Core | TypeORM |
-| Entity | Entity class | `@Entity()` class |
-| DbContext | `DbContext` | `Repository<T>` |
-| DbSet<T> | `DbSet<T>` | `Repository<T>` |
-| Migration | `Add-Migration` | `migration:generate` |
-| `[Key]` | `[Key]` | `@PrimaryGeneratedColumn()` |
-| `[Column]` | - | `@Column()` |
-| LINQ | LINQ | QueryBuilder / find 메서드 |
+### 왜 필요해?
 
-```csharp
-// Entity Framework Core
-public class User {
-    [Key]
-    public int Id { get; set; }
+서버를 껐다 켜면 메모리의 데이터는 사라집니다.
+**데이터베이스에 저장하면** 서버를 꺼도 데이터가 유지됩니다.
 
-    [Required]
-    [MaxLength(100)]
-    public string Name { get; set; }
+```
+[메모리 저장]
+서버 켜짐 → 데이터 저장 → 서버 꺼짐 → 데이터 사라짐 ❌
 
-    [Required]
-    public string Email { get; set; }
-}
+[데이터베이스 저장]
+서버 켜짐 → DB에 저장 → 서버 꺼짐 → 데이터 유지 ✅
+```
 
-// DbContext
-public class AppDbContext : DbContext {
-    public DbSet<User> Users { get; set; }
-}
+| 비유 | 메모리 | 데이터베이스 |
+|------|--------|-------------|
+| 메모 | 포스트잇 (떨어지면 사라짐) | 노트북 (계속 남음) |
+| 저장 | RAM | 하드디스크 |
 
-// 사용
-var users = await _context.Users.ToListAsync();
-var user = await _context.Users.FindAsync(1);
-await _context.Users.AddAsync(newUser);
-await _context.SaveChangesAsync();
+---
+
+## 2. ORM이란?
+
+### 한 줄 정리
+> **코드로 데이터베이스를 다루게 해주는 도구**
+
+### 왜 필요해?
+
+데이터베이스는 원래 SQL이라는 별도 언어로 다룹니다.
+ORM을 쓰면 **익숙한 코드(TypeScript)로 데이터베이스를 다룰 수 있습니다.**
+
+```sql
+-- SQL 직접 작성 (어려움)
+SELECT * FROM users WHERE id = 1;
+INSERT INTO users (name, email) VALUES ('Kim', 'kim@test.com');
 ```
 
 ```typescript
-// TypeORM - 거의 동일!
+// ORM 사용 (쉬움!)
+const user = await userRepository.findOne({ where: { id: 1 } });
+await userRepository.save({ name: 'Kim', email: 'kim@test.com' });
+```
+
+| 비유 | 설명 |
+|------|------|
+| 통역사 | 한국어(코드) ↔ 영어(SQL) 변환 |
+| 리모컨 | TV를 직접 조작 안 하고, 리모컨 버튼으로 제어 |
+| 자동차 | 엔진 원리 몰라도 핸들/페달로 운전 가능 |
+
+### TypeORM
+
+NestJS에서 가장 많이 쓰는 ORM입니다.
+
+```bash
+# 설치 (참고용)
+npm install @nestjs/typeorm typeorm
+npm install better-sqlite3  # SQLite (간단한 파일 기반 DB)
+```
+
+---
+
+## 3. Entity란?
+
+### 한 줄 정리
+> **데이터베이스 테이블의 설계도**
+
+### 왜 필요해?
+
+데이터베이스에 "사용자 테이블은 이런 구조야"라고 알려줘야 합니다.
+Entity 클래스가 그 설계도 역할을 합니다.
+
+| 비유 | 설명 |
+|------|------|
+| 엑셀 시트 헤더 | "이름, 이메일, 나이" 열이 있다고 정의 |
+| 신청서 양식 | "이 칸에는 이름, 저 칸에는 이메일" |
+| 건물 도면 | 어떤 구조로 지을지 설계 |
+
+### Entity 만들기
+
+```typescript
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+} from 'typeorm';
+
+@Entity()  // "이건 데이터베이스 테이블이야"
+export class User {
+  @PrimaryGeneratedColumn()  // 자동 증가하는 고유 번호 (1, 2, 3, ...)
+  id: number;
+
+  @Column({ length: 100 })   // 일반 컬럼 (최대 100글자)
+  name: string;
+
+  @Column({ unique: true })  // 유니크 (중복 불가)
+  email: string;
+
+  @Column({ default: true }) // 기본값 설정
+  isActive: boolean;
+
+  @CreateDateColumn()        // 생성 시간 자동 기록
+  createdAt: Date;
+}
+```
+
+### 데코레이터 설명
+
+| 데코레이터 | 의미 | 예시 |
+|------------|------|------|
+| `@Entity()` | "이건 DB 테이블이야" | 클래스에 붙임 |
+| `@PrimaryGeneratedColumn()` | 자동 증가 고유 번호 | id: 1, 2, 3... |
+| `@Column()` | 일반 컬럼 | name, email 등 |
+| `@Column({ length: 100 })` | 최대 길이 지정 | 100글자 이하 |
+| `@Column({ unique: true })` | 중복 불가 | 이메일은 유일해야 함 |
+| `@Column({ default: true })` | 기본값 | 안 넣으면 true |
+| `@Column({ nullable: true })` | null 허용 | 없어도 됨 |
+| `@CreateDateColumn()` | 생성 시간 자동 기록 | 2024-01-01 12:00:00 |
+| `@UpdateDateColumn()` | 수정 시간 자동 기록 | 수정할 때마다 갱신 |
+
+### Entity = 테이블
+
+```
+[User Entity]              [users 테이블]
+@Entity()                  ┌────┬──────┬─────────────┬──────────┐
+class User {               │ id │ name │ email       │ isActive │
+  id: number       →       ├────┼──────┼─────────────┼──────────┤
+  name: string     →       │ 1  │ Kim  │ kim@a.com   │ true     │
+  email: string    →       │ 2  │ Lee  │ lee@b.com   │ true     │
+  isActive: boolean→       └────┴──────┴─────────────┴──────────┘
+}
+```
+
+---
+
+## 4. Repository란?
+
+### 한 줄 정리
+> **데이터베이스와 대화하는 창구**
+
+### 왜 필요해?
+
+데이터베이스에서 데이터를 가져오거나, 저장하거나, 삭제하려면
+**Repository를 통해** 명령을 내립니다.
+
+| 비유 | 설명 |
+|------|------|
+| 창고 관리자 | "물건 가져와줘", "물건 넣어줘" 요청하면 처리 |
+| 은행 창구 | "입금해주세요", "출금해주세요" 요청 |
+| 도서관 사서 | "이 책 찾아주세요", "이 책 반납할게요" |
+
+### Repository 사용하기
+
+```typescript
+@Injectable()
+export class UsersService {
+  constructor(
+    @InjectRepository(User)                    // User Entity의 Repository 주입
+    private usersRepository: Repository<User>, // Repository 타입
+  ) {}
+
+  // 전체 조회
+  findAll(): Promise<User[]> {
+    return this.usersRepository.find();
+  }
+
+  // 하나 조회
+  findOne(id: number): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { id } });
+  }
+
+  // 생성
+  async create(data: CreateUserDto): Promise<User> {
+    const user = this.usersRepository.create(data);  // 객체 생성
+    return this.usersRepository.save(user);          // DB에 저장
+  }
+
+  // 수정
+  async update(id: number, data: UpdateUserDto): Promise<User | null> {
+    await this.usersRepository.update(id, data);
+    return this.findOne(id);
+  }
+
+  // 삭제
+  async remove(id: number): Promise<void> {
+    await this.usersRepository.delete(id);
+  }
+}
+```
+
+---
+
+## 5. CRUD 메서드
+
+### CRUD란?
+
+| 약자 | 의미 | 설명 |
+|------|------|------|
+| **C** | Create | 생성 |
+| **R** | Read | 조회 |
+| **U** | Update | 수정 |
+| **D** | Delete | 삭제 |
+
+### Repository 메서드 정리
+
+| 작업 | 메서드 | 예시 |
+|------|--------|------|
+| 전체 조회 | `.find()` | `repository.find()` |
+| 하나 조회 | `.findOne()` | `repository.findOne({ where: { id: 1 } })` |
+| 조건 조회 | `.find({ where })` | `repository.find({ where: { isActive: true } })` |
+| 생성 | `.create()` + `.save()` | `repository.save(repository.create(data))` |
+| 수정 | `.update()` | `repository.update(id, data)` |
+| 삭제 | `.delete()` | `repository.delete(id)` |
+
+### 상세 예시
+
+```typescript
+// 전체 조회
+const users = await this.usersRepository.find();
+
+// 조건으로 조회
+const activeUsers = await this.usersRepository.find({
+  where: { isActive: true },
+});
+
+// 정렬
+const sortedUsers = await this.usersRepository.find({
+  order: { createdAt: 'DESC' },  // 최신순
+});
+
+// 개수 제한
+const topUsers = await this.usersRepository.find({
+  take: 10,  // 10개만
+});
+
+// 하나만 조회
+const user = await this.usersRepository.findOne({
+  where: { id: 1 },
+});
+
+// 이메일로 조회
+const user = await this.usersRepository.findOne({
+  where: { email: 'kim@test.com' },
+});
+
+// 생성
+const newUser = this.usersRepository.create({
+  name: 'Kim',
+  email: 'kim@test.com',
+});
+await this.usersRepository.save(newUser);
+
+// 수정
+await this.usersRepository.update(1, { name: 'Lee' });
+
+// 삭제
+await this.usersRepository.delete(1);
+```
+
+---
+
+## 6. Module 설정
+
+### TypeORM 전역 설정
+
+```typescript
+// app.module.ts
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'better-sqlite3',  // DB 종류 (SQLite)
+      database: 'database.db', // DB 파일명
+      entities: [User],        // Entity 목록
+      synchronize: true,       // 자동 테이블 생성 (개발용)
+    }),
+    UsersModule,
+  ],
+})
+export class AppModule {}
+```
+
+| 옵션 | 설명 |
+|------|------|
+| `type` | 데이터베이스 종류 |
+| `database` | 데이터베이스 이름/파일 |
+| `entities` | Entity 클래스 목록 |
+| `synchronize` | Entity 변경 시 테이블 자동 수정 (개발용만!) |
+
+### Module에서 Entity 등록
+
+```typescript
+// users.module.ts
+@Module({
+  imports: [TypeOrmModule.forFeature([User])],  // User Entity 등록
+  controllers: [UsersController],
+  providers: [UsersService],
+})
+export class UsersModule {}
+```
+
+---
+
+## 7. 전체 예시
+
+### Entity
+
+```typescript
+// user.entity.ts
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
@@ -61,160 +329,19 @@ export class User {
 
   @Column({ unique: true })
   email: string;
-}
 
-// Repository 사용
-const users = await userRepository.find();
-const user = await userRepository.findOne({ where: { id: 1 } });
-await userRepository.save(newUser);
-// SaveChanges 불필요 - save()가 바로 저장
-```
-
----
-
-## 공부
-
-### 1. ORM이란?
-
-> **C#의 Entity Framework와 같은 역할!**
-> SQL 없이 객체로 데이터베이스 조작
-
-```csharp
-// EF Core - LINQ로 쿼리
-var user = await _context.Users
-    .Where(u => u.Id == 1)
-    .FirstOrDefaultAsync();
-```
-
-```typescript
-// TypeORM - 비슷한 방식
-const user = await userRepository.findOne({
-  where: { id: 1 }
-});
-```
-
-### 2. TypeORM 설치
-
-```bash
-npm install @nestjs/typeorm typeorm
-
-# SQLite (파일 기반 - 개발용 간편)
-npm install better-sqlite3
-
-# SQL Server (C# 개발자에게 익숙!)
-npm install mssql
-
-# MySQL
-npm install mysql2
-
-# PostgreSQL
-npm install pg
-```
-
-### 3. Entity - EF Core Entity와 비교
-
-```csharp
-// Entity Framework Core
-public class User {
-    [Key]
-    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-    public int Id { get; set; }
-
-    [Required]
-    [Column(TypeName = "nvarchar(100)")]
-    public string Name { get; set; }
-
-    [Required]
-    public string Email { get; set; }
-
-    public bool IsActive { get; set; } = true;
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-}
-```
-
-```typescript
-// TypeORM
-@Entity()
-export class User {
-  @PrimaryGeneratedColumn()  // [Key] + Identity
-  id: number;
-
-  @Column({ length: 100 })   // [Column(TypeName = "nvarchar(100)")]
-  name: string;
-
-  @Column({ unique: true })  // [Required] + Unique
-  email: string;
-
-  @Column({ default: true }) // = true 기본값
+  @Column({ default: true })
   isActive: boolean;
 
-  @CreateDateColumn()        // 자동 생성 시간
+  @CreateDateColumn()
   createdAt: Date;
 }
 ```
 
-**Column 데코레이터 비교:**
-| EF Core | TypeORM | 설명 |
-|---------|---------|------|
-| `[Key]` | `@PrimaryGeneratedColumn()` | 기본키 |
-| `[Required]` | `nullable: false` (기본값) | 필수 |
-| `[MaxLength(100)]` | `@Column({ length: 100 })` | 길이 |
-| `[Column(TypeName=)]` | `@Column({ type: })` | 타입 지정 |
-| 없음 | `@Column({ unique: true })` | 유니크 |
-| `= defaultValue` | `@Column({ default: })` | 기본값 |
-
-### 4. TypeORM 설정 - EF Core DbContext와 비교
-
-```csharp
-// EF Core - Program.cs
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
-```
+### Service
 
 ```typescript
-// NestJS - app.module.ts
-@Module({
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'better-sqlite3',   // 또는 'mssql', 'mysql', 'postgres'
-      database: 'database.db',
-      entities: [User],
-      synchronize: true,        // 개발용: 자동 마이그레이션
-    }),
-    UsersModule,
-  ],
-})
-export class AppModule {}
-```
-
-### 5. Repository 패턴 - EF Core DbSet과 비교
-
-```csharp
-// EF Core - DbContext 주입
-public class UsersService {
-    private readonly AppDbContext _context;
-
-    public UsersService(AppDbContext context) {
-        _context = context;
-    }
-
-    public async Task<List<User>> GetAllAsync()
-        => await _context.Users.ToListAsync();
-
-    public async Task<User?> GetByIdAsync(int id)
-        => await _context.Users.FindAsync(id);
-
-    public async Task<User> CreateAsync(User user) {
-        await _context.Users.AddAsync(user);
-        await _context.SaveChangesAsync();
-        return user;
-    }
-}
-```
-
-```typescript
-// TypeORM - Repository 주입
+// users.service.ts
 @Injectable()
 export class UsersService {
   constructor(
@@ -230,89 +357,83 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { id } });
   }
 
-  async create(data: CreateUserDto): Promise<User> {
-    const user = this.usersRepository.create(data);
+  create(dto: CreateUserDto): Promise<User> {
+    const user = this.usersRepository.create(dto);
     return this.usersRepository.save(user);
-    // SaveChanges 불필요!
+  }
+
+  async update(id: number, dto: UpdateUserDto): Promise<User | null> {
+    await this.usersRepository.update(id, dto);
+    return this.findOne(id);
+  }
+
+  async remove(id: number): Promise<void> {
+    await this.usersRepository.delete(id);
   }
 }
 ```
 
-**Module 등록:**
+### Controller
+
 ```typescript
-@Module({
-  imports: [TypeOrmModule.forFeature([User])],  // DbSet 등록과 비슷
-  controllers: [UsersController],
-  providers: [UsersService],
-})
-export class UsersModule {}
+// users.controller.ts
+@Controller('users')
+export class UsersController {
+  constructor(private usersService: UsersService) {}
+
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(+id);
+  }
+
+  @Post()
+  create(@Body() dto: CreateUserDto) {
+    return this.usersService.create(dto);
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
+    return this.usersService.update(+id, dto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(+id);
+  }
+}
 ```
 
-### 6. CRUD 메서드 비교
+---
 
-| EF Core | TypeORM | 설명 |
-|---------|---------|------|
-| `.ToListAsync()` | `.find()` | 전체 조회 |
-| `.FindAsync(id)` | `.findOne({ where: { id } })` | ID로 조회 |
-| `.FirstOrDefaultAsync(x => ...)` | `.findOne({ where: {...} })` | 조건 조회 |
-| `.AddAsync(entity)` | `.create()` + `.save()` | 생성 |
-| `.Update(entity)` | `.save(entity)` | 수정 |
-| `.Remove(entity)` | `.delete(id)` 또는 `.remove()` | 삭제 |
-| `.SaveChangesAsync()` | 불필요 (자동) | 저장 |
+## C# 개발자를 위한 비교
+
+| 개념 | Entity Framework Core | TypeORM |
+|------|----------------------|---------|
+| ORM | EF Core | TypeORM |
+| Entity | Entity class | `@Entity()` class |
+| DbContext | `DbContext` | `Repository<T>` |
+| `[Key]` | Primary Key | `@PrimaryGeneratedColumn()` |
+| `[Required]` | 필수 | `nullable: false` (기본값) |
+| `DbSet<T>` | 테이블 접근 | `Repository<T>` |
+| `ToListAsync()` | 전체 조회 | `.find()` |
+| `FindAsync(id)` | ID로 조회 | `.findOne({ where: { id } })` |
+| `Add` + `SaveChanges` | 저장 | `.create()` + `.save()` |
 
 ```csharp
 // EF Core
-var users = await _context.Users
-    .Where(u => u.IsActive)
-    .OrderByDescending(u => u.CreatedAt)
-    .Take(10)
-    .ToListAsync();
+var users = await _context.Users.ToListAsync();
+var user = await _context.Users.FindAsync(1);
 ```
 
 ```typescript
-// TypeORM
-const users = await this.usersRepository.find({
-  where: { isActive: true },
-  order: { createdAt: 'DESC' },
-  take: 10,
-});
-```
-
-### 7. 조건 검색 - LINQ vs TypeORM
-
-```csharp
-// EF Core LINQ
-var user = await _context.Users
-    .FirstOrDefaultAsync(u => u.Email == "kim@test.com");
-
-var users = await _context.Users
-    .Where(u => u.IsActive && u.Name.Contains("Kim"))
-    .ToListAsync();
-
-var userIds = new[] { 1, 2, 3 };
-var users = await _context.Users
-    .Where(u => userIds.Contains(u.Id))
-    .ToListAsync();
-```
-
-```typescript
-// TypeORM
-const user = await this.usersRepository.findOne({
-  where: { email: 'kim@test.com' }
-});
-
-const users = await this.usersRepository.find({
-  where: {
-    isActive: true,
-    name: Like('%Kim%')  // LINQ Contains와 비슷
-  }
-});
-
-// IN 조건
-import { In } from 'typeorm';
-const users = await this.usersRepository.find({
-  where: { id: In([1, 2, 3]) }
-});
+// TypeORM - 비슷!
+const users = await this.usersRepository.find();
+const user = await this.usersRepository.findOne({ where: { id: 1 } });
 ```
 
 ---
@@ -322,14 +443,14 @@ const users = await this.usersRepository.find({
 ### 연습 1: 빈칸 채우기
 
 ```typescript
-// 1. Entity 정의 (C#: public class User)
+// 1. Entity 정의
 @_______()
 export class User {
-  // 2. 기본키 자동 증가 (C#: [Key])
+  // 2. 자동 증가 기본키
   @_______()
   id: number;
 
-  // 3. 컬럼 정의 (C#: [MaxLength(100)])
+  // 3. 일반 컬럼
   @_______({ length: 100 })
   name: string;
 
@@ -338,7 +459,7 @@ export class User {
   createdAt: Date;
 }
 
-// 5. Repository 주입 (C#: DbSet<User>)
+// 5. Repository 주입
 constructor(
   @_______( User )
   private usersRepository: Repository<User>,
@@ -360,20 +481,20 @@ constructor(
 
 | 번호 | 설명 | O/X |
 |------|------|-----|
-| 1 | TypeORM은 C#의 Entity Framework Core와 비슷한 역할이다 | |
-| 2 | `@PrimaryGeneratedColumn()`은 C#의 `[Key]`와 같은 역할이다 | |
-| 3 | TypeORM에서 데이터를 저장할 때 `SaveChanges()`를 호출해야 한다 | |
-| 4 | `findOne({ where: { id } })`는 EF Core의 `FindAsync(id)`와 비슷하다 | |
-| 5 | `Repository<T>`는 EF Core의 `DbSet<T>`와 비슷한 역할이다 | |
+| 1 | ORM을 사용하면 SQL 없이 데이터베이스를 다룰 수 있다 | |
+| 2 | Entity는 데이터베이스 테이블의 설계도이다 | |
+| 3 | `@PrimaryGeneratedColumn()`은 자동 증가하는 고유 번호를 만든다 | |
+| 4 | Repository의 `.save()`는 데이터를 삭제한다 | |
+| 5 | `synchronize: true`는 프로덕션에서 사용해야 한다 | |
 
 <details>
 <summary>정답 보기</summary>
 
 1. O
 2. O
-3. X (TypeORM의 `save()`는 자동으로 저장, SaveChanges 불필요)
-4. O
-5. O
+3. O
+4. X (`.save()`는 저장, `.delete()`가 삭제)
+5. X (`synchronize: true`는 개발용, 프로덕션에서는 위험)
 
 </details>
 
@@ -391,7 +512,7 @@ export class User {
 @Injectable()
 export class UsersService {
   constructor(
-    private usersRepository: Repository<User>,  // 주입
+    private usersRepository: Repository<User>,
   ) {}
 }
 
@@ -406,23 +527,23 @@ async create(dto: CreateUserDto) {
 <summary>정답 보기</summary>
 
 ```typescript
-// 1번: 데코레이터는 함수이므로 괄호 필요
+// 1번: 괄호 필요
 @Entity()
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 }
 
-// 2번: @InjectRepository 데코레이터 필요
+// 2번: @InjectRepository 필요
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
+    @InjectRepository(User)  // 추가!
     private usersRepository: Repository<User>,
   ) {}
 }
 
-// 3번: save()를 호출해야 실제 저장됨
+// 3번: save()를 호출해야 DB에 저장됨
 async create(dto: CreateUserDto) {
   const user = this.usersRepository.create(dto);
   return this.usersRepository.save(user);  // save 필요!
@@ -431,111 +552,70 @@ async create(dto: CreateUserDto) {
 
 </details>
 
-### 연습 4: EF Core → TypeORM 변환
+### 연습 4: CRUD 메서드 매칭
 
-| EF Core | TypeORM |
-|---------|---------|
-| `[Key]` | `@_______()` |
-| `[Required]` | `nullable: _______` (기본값) |
-| `[MaxLength(100)]` | `@Column({ _______: 100 })` |
-| `DbSet<User>` | `Repository<_______>` |
-| `ToListAsync()` | `._______()` |
-| `FindAsync(id)` | `.findOne({ _______: { id } })` |
-| `AddAsync` + `SaveChanges` | `.create()` + `._______()` |
+| 작업 | Repository 메서드 |
+|------|------------------|
+| 전체 조회 | |
+| 하나 조회 | |
+| 생성 | |
+| 수정 | |
+| 삭제 | |
 
 <details>
 <summary>정답 보기</summary>
 
-| EF Core | TypeORM |
-|---------|---------|
-| `[Key]` | `@PrimaryGeneratedColumn()` |
-| `[Required]` | `nullable: false` (기본값) |
-| `[MaxLength(100)]` | `@Column({ length: 100 })` |
-| `DbSet<User>` | `Repository<User>` |
-| `ToListAsync()` | `.find()` |
-| `FindAsync(id)` | `.findOne({ where: { id } })` |
-| `AddAsync` + `SaveChanges` | `.create()` + `.save()` |
+| 작업 | Repository 메서드 |
+|------|------------------|
+| 전체 조회 | `.find()` |
+| 하나 조회 | `.findOne({ where: { id } })` |
+| 생성 | `.create()` + `.save()` |
+| 수정 | `.update(id, data)` |
+| 삭제 | `.delete(id)` |
 
 </details>
 
 ---
 
-## 숙제
+## 데이터 흐름 정리
 
-### 숙제 1: CRUD 메서드 매칭
-
-**문제**: EF Core와 TypeORM의 CRUD 메서드를 매칭하세요.
-
-| 약자 | 전체 | EF Core | TypeORM |
-|------|------|---------|---------|
-| C | Create | `AddAsync` + `SaveChanges` | |
-| R | Read | `ToListAsync` / `FindAsync` | |
-| U | Update | `Update` + `SaveChanges` | |
-| D | Delete | `Remove` + `SaveChanges` | |
-
-### 숙제 2: Product Entity 설계
-
-**문제**: C# Entity를 참고하여 TypeORM Entity를 작성하세요.
-
-```csharp
-// C# Entity
-public class Product {
-    [Key] public int Id { get; set; }
-    [Required][MaxLength(100)] public string Name { get; set; }
-    [Required] public decimal Price { get; set; }
-    public int Stock { get; set; } = 0;
-    public string? Description { get; set; }  // nullable
-    public DateTime CreatedAt { get; set; }
-}
 ```
-
-```typescript
-// TypeORM Entity로 변환
-@Entity()
-export class Product {
-  // 여기에 코드 작성
-
-}
-```
-
-### 숙제 3: Products Service CRUD 구현
-
-**문제**: EF Core 스타일로 TypeORM Service를 구현하세요.
-
-**요구사항**:
-- `findAll()`: 전체 조회
-- `findOne(id)`: ID로 조회
-- `create(dto)`: 생성
-- `update(id, dto)`: 수정
-- `remove(id)`: 삭제
-
-```typescript
-@Injectable()
-export class ProductsService {
-  constructor(
-    @InjectRepository(Product)
-    private productsRepository: Repository<Product>,
-  ) {}
-
-  // 여기에 CRUD 메서드 구현
-
-
-}
+[요청]
+   │
+   ↓
+[Controller] - 요청 접수
+   │
+   ↓
+[Service] - 비즈니스 로직
+   │
+   │  this.usersRepository.find()
+   ↓
+[Repository] - DB 명령 전달
+   │
+   │  SQL 변환 (ORM이 자동으로)
+   ↓
+[Database] - 실제 데이터 저장소
+   │
+   │  데이터 반환
+   ↓
+[응답]
 ```
 
 ---
 
 ## 핵심 정리
 
-| TypeORM | Entity Framework Core 대응 |
-|---------|---------------------------|
-| TypeORM | EF Core |
-| `@Entity()` | Entity class |
-| `@PrimaryGeneratedColumn()` | `[Key]` |
-| `@Column()` | 속성 (기본) |
-| `Repository<T>` | `DbSet<T>` |
-| `.find()` | `.ToListAsync()` |
-| `.findOne()` | `.FindAsync()` / `.FirstOrDefault()` |
-| `.save()` | `.Add()` + `.SaveChanges()` |
-| `.delete()` | `.Remove()` + `.SaveChanges()` |
-| `synchronize: true` | Auto Migration |
+| 용어 | 한 줄 설명 |
+|------|-----------|
+| 데이터베이스 | 데이터를 저장하는 창고 |
+| ORM | 코드로 DB를 다루게 해주는 도구 |
+| TypeORM | NestJS에서 쓰는 ORM |
+| Entity | DB 테이블의 설계도 |
+| `@Entity()` | "이건 DB 테이블이야" |
+| `@PrimaryGeneratedColumn()` | 자동 증가 고유 번호 |
+| `@Column()` | 테이블의 열 (컬럼) |
+| Repository | DB와 대화하는 창구 |
+| `.find()` | 전체 조회 |
+| `.findOne()` | 하나 조회 |
+| `.save()` | 저장 |
+| `.delete()` | 삭제 |
